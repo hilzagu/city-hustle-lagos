@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>City Hustle: Lagos</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<style>
+:root{--sng-primary:#0b7a3b;--sng-accent:#ffc20e;--primary-ink:#fff;--accent-ink:#111;
+--bg:#f6f4ee;--fg:#16201a;--panel:#ffffffee;--line:#16201a22;--sky:#bfe3f2;--ground:#d9d2bd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#101612;--fg:#eef3ee;--panel:#17201ae8;--line:#ffffff24;--sky:#16283a;--ground:#2c2f26}}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:600 14px/1.4 "Trebuchet MS",system-ui,sans-serif;overflow:hidden}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.card{background:var(--panel);border:2px solid var(--sng-primary);border-radius:10px;padding:8px 10px;backdrop-filter:blur(6px)}
+#hud{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 8px);display:none;gap:8px;flex-wrap:wrap;pointer-events:none}
+#needs{display:grid;grid-template-columns:repeat(3,76px);gap:4px 8px}
+.n label{display:block;font-size:11px}.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;width:50%;background:var(--sng-primary)}.bar i.low{background:#d23b2a}
+#stats b{font-size:18px}
+button{font:800 15px "Trebuchet MS",system-ui,sans-serif;cursor:pointer}
+#act{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);background:var(--sng-accent);color:var(--accent-ink);border:0;border-radius:28px;padding:14px 26px;font-size:16px;box-shadow:0 4px 0 var(--sng-primary);display:none}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%);padding:8px 14px;border-radius:8px;background:var(--sng-primary);color:var(--primary-ink);opacity:0;transition:opacity .25s;pointer-events:none;max-width:80%;text-align:center}
+#gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;z-index:5;background:#0008}
+#gate .card{max-width:360px;width:100%;padding:22px;background:var(--bg)}
+h1{margin:0 0 6px;font-size:28px;line-height:1.05}
+.btn{display:block;width:100%;padding:12px;border-radius:8px;margin-top:8px;border:2px solid var(--sng-primary)}
+.btn.main{background:var(--sng-primary);color:var(--primary-ink)}.btn.alt{background:transparent;color:var(--fg)}
+small{opacity:.8}
+#lbBtn{position:fixed;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:none;border-radius:50%;width:44px;height:44px;border:2px solid var(--sng-primary);background:var(--panel);font-size:20px}
+#lb{position:fixed;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 68px);display:none;min-width:200px}
+#lb ol{margin:4px 0 0;padding-left:20px}
+.pop{position:fixed;left:50%;top:45%;transform:translateX(-50%);font:800 22px system-ui,sans-serif;color:var(--sng-accent);text-shadow:0 2px 0 #000a;animation:up 1.4s ease-out forwards;pointer-events:none}
+@keyframes up{to{top:30%;opacity:0}}@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+</style></head><body>
+<div id="gate"><div class="card"><h1>City Hustle: Lagos</h1>
+<p>Eat, work a shift, pay Saturday rent, and share the city with other players.</p>
+<p id="gnote"><small>Checking start.ng…</small></p><div id="gbtns"></div></div></div>
+<div id="hud"><div class="card" id="stats"><div><b id="naira"></b></div><div id="clock"></div><div id="rent"></div><small id="who"></small><div id="lvl"></div><div id="goals"></div></div>
+<div class="card" id="needs"></div></div>
+<button id="act"></button><div id="toast" role="status"></div>
+<button id="lbBtn" aria-label="Leaderboard">🏆</button><div id="lb" class="card"></div>
+<script type="module" src="src/game.js"></script>
+</body></html>
