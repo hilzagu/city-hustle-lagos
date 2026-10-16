@@ -43,12 +43,24 @@ async function ask(message, replyType, timeoutMs = 3000) {
   });
 }
 
+let guest = null; // start.ng's guest look, from the last reply
 // The user, null (signed out), or undefined (start.ng didn't answer).
 async function check() {
   if (!START_NG) return null;
   const reply = await ask({ type: 'startng:whoami' }, 'startng:user');
-  return reply && (reply.user ?? null);
+  if (!reply) return undefined;
+  if (reply.guest) guest = reply.guest;
+  return reply.user ?? null;
 }
+
+/** start.ng's guest look ({ name, style, face }) once known, else null. */
+export const guestLook = () => guest;
+
+/** Saves a run ({ earned: 123 }, whole numbers matching startng.json). Resolves to start.ng's reply, or undefined. */
+export const saveScore = (stats) => ask({ type: 'startng:score', stats }, 'startng:scoreSaved', 5000);
+
+/** The leaderboard: { ok, entries } or undefined. */
+export const getLeaderboard = (limit = 10) => ask({ type: 'startng:leaderboard', limit }, 'startng:leaderboardData', 5000);
 
 /** The signed-in start.ng user ({ id, name, style }), or null. */
 export async function getCurrentUser() {
@@ -68,5 +80,5 @@ export function onUserChange(fn) {
 
 /** Sends the player to start.ng to sign in; start.ng brings them back afterwards. */
 export function signIn() {
-  location.href = `${START_NG}/?return_to=${encodeURIComponent(location.href)}`;
+  location.href = `${START_NG}/?return_to=${encodeURIComponent(location.origin + location.pathname)}`;
 }

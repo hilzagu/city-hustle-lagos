@@ -1,16 +1,19 @@
 import * as THREE from 'three';
-import { START_NG, getCurrentUser, onUserChange, signIn } from './platform.js';
+import { START_NG, getCurrentUser, onUserChange, signIn, saveScore, getLeaderboard, guestLook } from './platform.js';
 const $ = (id) => document.getElementById(id);
 const K = Math.PI; // r160 uses physical light units
 
 /* ---------- start.ng style -> character ---------- */
-const DEFAULT_STYLE = { primaryColor: '#0b7a3b', secondaryColor: '#ffc20e', skinColor: '#8a5634', hat: 'none', accessory: 'none' };
-const HATS = ['none', 'cap', 'beanie', 'tophat', 'crown'], ACCS = ['none', 'glasses', 'scarf', 'backpack'];
+const DEFAULT_STYLE = { body: 'male', primaryColor: '#0b7a3b', secondaryColor: '#2b2f4a', skinColor: '#8a5634', hairColor: '#17100d', hair: 'short', hat: 'none', accessory: 'none' };
+const BODIES = ['female', 'male'], HAIRS = ['short', 'afro', 'braids', 'bun', 'ponytail', 'dreads', 'bald'];
+const HATS = ['none', 'cap', 'beanie', 'tophat', 'crown'], ACCS = ['none', 'glasses', 'earrings', 'beard', 'scarf', 'backpack'];
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 function normStyle(s) { // unknown or missing values fall back to defaults
   const o = { ...DEFAULT_STYLE };
   if (s && typeof s === 'object') {
-    for (const k of ['primaryColor', 'secondaryColor', 'skinColor']) if (HEX.test(s[k] || '')) o[k] = s[k];
+    for (const k of ['primaryColor', 'secondaryColor', 'skinColor', 'hairColor']) if (HEX.test(s[k] || '')) o[k] = s[k];
+    if (BODIES.includes(s.body)) o.body = s.body;
+    if (HAIRS.includes(s.hair)) o.hair = s.hair;
     if (HATS.includes(s.hat)) o.hat = s.hat;
     if (ACCS.includes(s.accessory)) o.accessory = s.accessory;
   }
@@ -75,30 +78,48 @@ for (let i = 0; i < 6; i++) {
 }
 
 /* ---------- character: every part is driven by the start.ng style ---------- */
-function makeAvatar() {
-  const g = new THREE.Group(), M = () => new THREE.MeshLambertMaterial();
-  const m = { body: M(), skin: M(), hair: L(0x17100d), acc: M(), dark: L(0x151515), gold: L(0xf2c14e) };
-  const add = (geo, mt, x, y, z, fn, p = g) => { const o = new THREE.Mesh(geo, mt); o.position.set(x, y, z); o.castShadow = true; fn && fn(o); p.add(o); return o; };
+function makeAvatar() { // slim, realistic proportions like the start.ng character (about 1.8 m, scaled up for the map)
+  const g = new THREE.Group(), root = new THREE.Group(), headG = new THREE.Group(); root.scale.setScalar(1.35); g.add(root);
+  headG.position.y = 1.68; headG.scale.setScalar(.27); headG.scale.y = .32; root.add(headG); // old head-space coordinates (head centre y=2.1, r=.42)
+  const M = () => new THREE.MeshLambertMaterial();
+  const m = { body: M(), skin: M(), hair: M(), acc: M(), dark: L(0x151515), gold: L(0xf2c14e) };
+  const add = (geo, mt, x, y, z, fn, p = root) => { const o = new THREE.Mesh(geo, mt); o.position.set(x, y, z); o.castShadow = true; fn && fn(o); p.add(o); return o; };
   const Cy = (a, b, h, s = 12) => new THREE.CylinderGeometry(a, b, h, s), Sp = (r, ...a) => new THREE.SphereGeometry(r, 16, 10, ...a), Bx = (a, b, c) => new THREE.BoxGeometry(a, b, c);
-  add(Cy(.45, .55, 1.3, 14), m.body, 0, 1.15, 0); add(Sp(.42), m.skin, 0, 2.1, 0);
-  const hair = add(Sp(.45, 0, 6.3, 0, 1.3), m.hair, 0, 2.15, 0);
-  add(Bx(1.05, .18, .9), m.acc, 0, 1.5, 0, (o) => o.rotation.z = .5); add(Bx(.7, .6, .4), m.skin, 0, .3, 0);
-  [-.15, .15].forEach((x) => add(Sp(.05), m.dark, x, 2.15, .38)); [-.62, .62].forEach((x) => add(Cy(.12, .12, 1, 8), m.skin, x, 1.2, 0));
-  const P = {}, grp = (n) => { const h = new THREE.Group(); h.visible = false; g.add(h); return (P[n] = h); };
-  let h = grp('cap'); add(Sp(.47, 0, 6.3, 0, 1.57), m.acc, 0, 2.15, 0, null, h); add(Bx(.5, .06, .5), m.acc, 0, 2.38, .5, null, h);
-  h = grp('beanie'); add(Sp(.48, 0, 6.3, 0, 1.75), m.acc, 0, 2.15, 0, null, h); add(Sp(.12), m.body, 0, 2.7, 0, null, h);
-  h = grp('tophat'); add(Cy(.65, .65, .06, 20), m.dark, 0, 2.48, 0, null, h); add(Cy(.38, .38, .7, 16), m.dark, 0, 2.83, 0, null, h); add(Cy(.39, .39, .12, 16), m.acc, 0, 2.62, 0, null, h);
-  h = grp('crown'); add(Cy(.42, .38, .3, 12), m.gold, 0, 2.6, 0, null, h); for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283; add(new THREE.ConeGeometry(.08, .28, 6), m.gold, Math.cos(a) * .38, 2.88, Math.sin(a) * .38, null, h); }
-  h = grp('glasses'); [-.16, .16].forEach((x) => add(new THREE.TorusGeometry(.1, .025, 6, 12), m.dark, x, 2.15, .4, null, h)); add(Bx(.12, .02, .02), m.dark, 0, 2.15, .41, null, h);
-  h = grp('scarf'); add(new THREE.TorusGeometry(.4, .12, 8, 16), m.acc, 0, 1.85, 0, (o) => o.rotation.x = Math.PI / 2, h);
-  h = grp('backpack'); add(Bx(.7, .9, .35), m.acc, 0, 1.3, -.5, null, h);
-  g.userData = { m, P, hair }; return g;
+  const P = {}, grp = (n, p = headG) => { const h = new THREE.Group(); h.visible = false; p.add(h); return (P[n] = h); };
+  const H = (geo, mt, x, y, z, fn, p = headG) => add(geo, mt, x, y - 2.1, z, fn, p); // place a part in head space using the old coordinates
+  headG.scale.set(.27, .27, .27);
+  // body: top, sleeves, forearms, neck, shoes
+  add(Cy(.24, .2, .64, 16), m.body, 0, 1.18, 0, (o) => o.scale.z = .62);
+  [-1, 1].forEach((d) => { add(Cy(.078, .07, .32, 10), m.body, d * .31, 1.36, 0, (o) => o.rotation.z = d * .08);
+    add(Cy(.055, .048, .46, 10), m.skin, d * .335, 1.0, 0); add(Sp(.05), m.skin, d * .34, .76, 0);
+    add(Bx(.14, .07, .26), m.dark, d * .12, .035, .05); });
+  add(Cy(.05, .055, .14, 10), m.skin, 0, 1.55, 0);
+  H(Sp(.42), m.skin, 0, 2.1, 0); [-.15, .15].forEach((x) => H(Sp(.05), m.dark, x, 2.15, .38));
+  let h = grp('male', root); [-1, 1].forEach((d) => add(Cy(.1, .085, .9, 10), m.acc, d * .12, .5, 0, null, h)); add(Bx(.4, .14, .24), m.acc, 0, .86, 0, null, h); // trousers
+  h = grp('female', root); add(Cy(.22, .34, .5, 18), m.acc, 0, .78, 0, null, h); [-1, 1].forEach((d) => add(Cy(.065, .055, .55, 10), m.skin, d * .1, .28, 0, null, h)); // skirt + legs
+  const dome = (p) => H(Sp(.45, 0, 6.3, 0, 1.3), m.hair, 0, 2.15, 0, null, p);
+  h = grp('short'); dome(h);
+  h = grp('afro'); H(Sp(.62), m.hair, 0, 2.3, 0, null, h);
+  h = grp('bun'); dome(h); H(Sp(.2), m.hair, 0, 2.68, -.05, null, h);
+  h = grp('ponytail'); dome(h); H(Cy(.1, .06, .7, 8), m.hair, 0, 1.95, -.5, (o) => o.rotation.x = -.4, h);
+  h = grp('braids'); dome(h); [-.38, -.19, .19, .38].forEach((x) => H(Cy(.05, .05, .8, 6), m.hair, x, 1.85, -.25, null, h));
+  h = grp('dreads'); dome(h); [-.4, -.2, 0, .2, .4].forEach((x) => H(Cy(.07, .07, .7, 6), m.hair, x, 1.9, -.3, null, h));
+  h = grp('cap'); H(Sp(.47, 0, 6.3, 0, 1.57), m.acc, 0, 2.15, 0, null, h); H(Bx(.5, .06, .5), m.acc, 0, 2.38, .5, null, h);
+  h = grp('beanie'); H(Sp(.48, 0, 6.3, 0, 1.75), m.acc, 0, 2.15, 0, null, h); H(Sp(.12), m.body, 0, 2.7, 0, null, h);
+  h = grp('tophat'); H(Cy(.65, .65, .06, 20), m.dark, 0, 2.48, 0, null, h); H(Cy(.38, .38, .7, 16), m.dark, 0, 2.83, 0, null, h); H(Cy(.39, .39, .12, 16), m.acc, 0, 2.62, 0, null, h);
+  h = grp('crown'); H(Cy(.42, .38, .3, 12), m.gold, 0, 2.6, 0, null, h); for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283; H(new THREE.ConeGeometry(.08, .28, 6), m.gold, Math.cos(a) * .38, 2.88, Math.sin(a) * .38, null, h); }
+  h = grp('glasses'); [-.16, .16].forEach((x) => H(new THREE.TorusGeometry(.1, .025, 6, 12), m.dark, x, 2.15, .4, null, h)); H(Bx(.12, .02, .02), m.dark, 0, 2.15, .41, null, h);
+  h = grp('earrings'); [-.43, .43].forEach((x) => H(Sp(.06), m.gold, x, 2.0, 0, null, h));
+  h = grp('beard'); H(Bx(.38, .26, .18), m.hair, 0, 1.88, .3, null, h);
+  h = grp('scarf', root); add(new THREE.TorusGeometry(.12, .045, 8, 16), m.acc, 0, 1.52, 0, (o) => o.rotation.x = Math.PI / 2, h);
+  h = grp('backpack', root); add(Bx(.4, .5, .2), m.acc, 0, 1.2, -.27, null, h);
+  g.userData = { m, P }; return g;
 }
-function applyStyle(g, st) {
-  const { m, P, hair } = g.userData;
-  m.body.color.set(st.primaryColor); m.acc.color.set(st.secondaryColor); m.skin.color.set(st.skinColor);
-  for (const k in P) P[k].visible = k === st.hat || k === st.accessory;
-  hair.visible = !['cap', 'beanie', 'tophat'].includes(st.hat);
+function applyStyle(g, st) { // primary = top, secondary = trousers/skirt (and hat, scarf, backpack trim)
+  const { m, P } = g.userData;
+  m.body.color.set(st.primaryColor); m.acc.color.set(st.secondaryColor); m.skin.color.set(st.skinColor); m.hair.color.set(st.hairColor);
+  const covered = ['cap', 'beanie', 'tophat'].includes(st.hat);
+  for (const k in P) P[k].visible = k === st.body || k === st.hat || k === st.accessory || (k === st.hair && !covered);
 }
 const tagFor = (name) => { const t = label(name); t.scale.set(2.6, .5, 1); t.position.y = 3.3; return t; };
 
@@ -109,6 +130,7 @@ const GOALS = [['work', 'Work a shift'], ['eat', 'Eat a meal'], ['social', 'Hang
 const sid = Math.random().toString(36).slice(2);
 const me = { avatar: makeAvatar(), x: 0, z: 3, slow: 0, dark: 0, horn: 0, id: 'guest', name: 'Guest', signed: false, style: normStyle(), best: 0 };
 scene.add(me.avatar); applyStyle(me.avatar, me.style);
+const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1.05, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .55 })); ring.rotation.x = -Math.PI / 2; ring.position.y = .04; me.avatar.add(ring); // marks you
 let started = false, target = null, near = null, bc = null; const keys = {}, others = {};
 const lagosNow = () => new Date(Date.now() + 3600e3); // WAT = UTC+1, no DST
 function nextRent() {
@@ -120,20 +142,22 @@ const jset = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const save = () => jset('chl:' + me.id, { naira: me.naira, earned: me.earned, needs: me.needs, xp: me.xp, goals: me.goals, streak: me.streak, day: me.day });
 function setIdentity(u) { // u = { id, name, style } from start.ng, or null for guest
   if (started) save();
-  Object.assign(me, { naira: 20000, earned: 0, needs: { hunger: 70, energy: 80, fun: 60, social: 50, hygiene: 70, bladder: 80 }, xp: 0, goals: {}, streak: 0, day: '' },
+  Object.assign(me, { naira: 20000, earned: 0, needs: { hunger: 70, energy: 80, fun: 60, social: 50, hygiene: 70, bladder: 80 }, xp: 0, goals: {}, streak: 0, day: '', sent: 0, sentAt: 0 },
     jget('chl:' + (u ? u.id : 'guest'), {}), { id: u ? String(u.id) : 'guest', name: u?.name || 'Guest', signed: !!u });
-  me.rentDue = nextRent(); me.style = normStyle(u?.style); applyStyle(me.avatar, me.style); styleUI(me.style);
+  me.rentDue = nextRent(); me.style = normStyle(u ? u.style : guestLook()?.style); applyStyle(me.avatar, me.style); styleUI(me.style);
   if (me.tag) me.avatar.remove(me.tag); me.tag = tagFor(me.name); me.avatar.add(me.tag);
   $('who').textContent = me.signed ? me.name + ' · start.ng' : 'Guest (scores saved on this device)';
   const today = lagosNow().toISOString().slice(0, 10), yest = new Date(lagosNow() - 864e5).toISOString().slice(0, 10);
   if (me.day !== today) { me.streak = me.day === yest ? me.streak + 1 : 1; me.day = today; me.goals = {}; const bn = Math.min(500 * me.streak, 3000); earn(bn); setTimeout(() => toast('Day ' + me.streak + ' streak! +₦' + bn.toLocaleString()), 600); }
   submit(); hud();
 }
-function submit() { // best score = total ₦ earned; one entry per user id
+function sendScore() { if (me.signed && me.earned > me.sent && Date.now() - me.sentAt > 10000) { me.sent = me.earned; me.sentAt = Date.now(); saveScore({ earned: Math.floor(me.earned) }); } }
+function submit() { sendScore(); // best score = total ₦ earned; one entry per user id
   const b = jget('chl:board', []), old = b.find((e) => e.id === me.id); me.best = Math.max(old?.score || 0, me.earned);
   const nb = b.filter((e) => e.id !== me.id).concat({ id: me.id, name: me.name, score: me.best }).sort((a, c) => c.score - a.score).slice(0, 10); jset('chl:board', nb);
-  $('lb').innerHTML = '<b>Top hustlers</b> <small>(this device)</small><ol>' + nb.map((e) => `<li>${e.name.replace(/[<&]/g, '')}: ₦${e.score.toLocaleString()}</li>`).join('') + '</ol>';
+  localBoard = '<b>Top hustlers</b> <small>(this device)</small><ol>' + nb.map((e) => `<li>${e.name.replace(/[<&]/g, '')}: ₦${e.score.toLocaleString()}</li>`).join('') + '</ol>';
 }
+let localBoard = '';
 const earn = (n) => { me.naira += n; me.earned += n; };
 const lvl = () => Math.floor(Math.sqrt(me.xp / 60)) + 1;
 function toast(t) { const e = $('toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => e.style.opacity = 0, 2200); }
@@ -170,7 +194,7 @@ function events() {
 function dayNight() {
   const n = lagosNow(), h = n.getUTCHours() + n.getUTCMinutes() / 60, d = Math.min(1, Math.max(0, Math.sin((h - 6) / 13 * Math.PI)) * 1.4), dk = me.dark > Date.now();
   const c = new THREE.Color(0x0a1226).lerp(new THREE.Color(css('--sky') || '#bfe3f2'), d); scene.background = c; scene.fog.color = c;
-  hemi.intensity = (.3 + .6 * d) * (dk ? .5 : 1) * K; sun.intensity = (.08 + .7 * d) * K; winMat.color.set(dk ? 0x222a33 : d > .5 ? 0x6f8fa8 : 0xffd36b); groundColor();
+  hemi.intensity = (.5 + .5 * d) * (dk ? .5 : 1) * K; sun.intensity = (.08 + .7 * d) * K; winMat.color.set(dk ? 0x222a33 : d > .5 ? 0x6f8fa8 : 0xffd36b); groundColor();
 }
 function tick() {
   if (!started) return;
@@ -211,15 +235,19 @@ onUserChange((user) => { // player signed in or out on start.ng
   else if (user) { me.style = normStyle(user.style); applyStyle(me.avatar, me.style); styleUI(me.style); }
   else if (me.signed) { setIdentity(null); toast('Signed out on start.ng. You are now Guest.'); }
 });
-(async () => { groundColor(); const u = START_NG ? await getCurrentUser() : null; if (u) begin(u); else showGate(); })();
+(async () => { groundColor(); if (location.hash.includes('startng_session')) history.replaceState(null, '', location.pathname + location.search);
+  const u = START_NG ? await getCurrentUser() : null; if (u) begin(u); else if (new URLSearchParams(location.search).has('guest')) begin(null); else showGate(); })();
 
 /* ---------- input & loop ---------- */
-$('act').onclick = doAct; $('lbBtn').onclick = () => { const e = $('lb'); e.style.display = e.style.display === 'block' ? 'none' : 'block'; };
+$('act').onclick = doAct; $('lbBtn').onclick = async () => { const e = $('lb'); if (e.style.display === 'block') { e.style.display = 'none'; return; } e.style.display = 'block'; e.innerHTML = localBoard;
+  const r = await getLeaderboard(10); if (r?.ok && Array.isArray(r.entries)) e.innerHTML = '<b>Top hustlers</b> <small>(start.ng)</small><ol>' + r.entries.map((x) => `<li>${String(x.name).replace(/[<&]/g, '')}: ₦${Number(x.stats?.earned ?? x.score ?? 0).toLocaleString()}</li>`).join('') + '</ol>'; };
 addEventListener('keydown', (e) => { keys[e.key.toLowerCase()] = 1; if (e.key === 'e' || e.key === 'Enter') doAct(); target = null; });
 addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = 0);
 const ray = new THREE.Raycaster();
 ren.domElement.addEventListener('pointerdown', (e) => { if (!started) return; ray.setFromCamera({ x: e.clientX / innerWidth * 2 - 1, y: -(e.clientY / innerHeight * 2 - 1) }, cam); const h = ray.intersectObject(ground)[0]; if (h) target = { x: h.point.x, z: h.point.z }; });
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); ren.setSize(innerWidth, innerHeight); });
+let zoom = 1; // mouse wheel / trackpad zoom
+addEventListener('wheel', (e) => { zoom = Math.max(.3, Math.min(1.6, zoom * (1 + e.deltaY * .001))); }, { passive: true });
 setInterval(tick, 1000);
 let last = performance.now();
 function loop(now) {
@@ -235,7 +263,7 @@ function loop(now) {
   for (const k in others) { const o = others[k]; o.g.position.x += (o.x - o.g.position.x) * .2; o.g.position.z += (o.z - o.g.position.z) * .2; }
   danfos.forEach((d) => { const u = d.userData, a = u.alongX ? 'x' : 'z'; d.position[a] += u.v * dt; if (d.position[a] > 30) d.position[a] = -30; if (d.position[a] < -30) d.position[a] = 30;
     if (started && Math.hypot(d.position.x - me.x, d.position.z - me.z) < 2 && Date.now() > me.horn) { me.horn = Date.now() + 3000; toast('Danfo horn! Comot for road!'); } });
-  cam.position.set(me.x, 11, me.z + 6.5); cam.lookAt(me.x, 0, me.z); ren.render(scene, cam); requestAnimationFrame(loop);
+  cam.position.set(me.x, 11 * zoom, me.z + 6.5 * zoom); cam.lookAt(me.x, 0, me.z - 2.6 * zoom); ren.render(scene, cam); requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 window.__game = { state: () => ({ id: me.id, name: me.name, signed: me.signed, style: me.style, started, earned: me.earned }) }; // read-only, for testing

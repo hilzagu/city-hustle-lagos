@@ -1,0 +1,7 @@
+{
+  "leaderboard": {
+    "stats": [
+      { "key": "earned", "label": "Total ₦ earned", "order": "highest" }
+    ]
+  }
+}
